@@ -1,6 +1,7 @@
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
+from django.conf import settings
 
 
 # --- Пользователь  ---
@@ -25,12 +26,12 @@ class User(AbstractUser):
 # --- Книга ---
 class Book(models.Model):
     title = models.CharField(max_length=255)
-    description = models.TextField(blank=True)
-    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='books')
-    is_visible = models.BooleanField(default=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    description = models.TextField()
 
-    hidden_comment = models.TextField(blank=True)  # Заполняется админом при скрытии работы
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    is_visible = models.BooleanField(default=True)
+    hidden_comment = models.TextField(blank=True)
+    cover = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return self.title
