@@ -2,6 +2,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework.views import APIView
 from rest_framework import generics
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
@@ -15,8 +16,8 @@ from rest_framework import status
 import json
 import os
 
-from .models import Book
-from .serializers import RegisterSerializer
+from .models import *
+from .serializers import *
 
 User = get_user_model()
 
@@ -58,37 +59,29 @@ def user_logout(request):
             return JsonResponse({}, status=205)
 
 
+class GenreListView(APIView):
+    def get(self, request):
+        genres = Genre.objects.filter(is_active=True)
+        serializer = GenreSerializer(genres, many=True)
+        return Response(serializer.data)
+    
+    
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_book(request):
-    user = request.user  # Теперь это точно авторизованный User
+    serializer = BookCreateSerializer(data=request.data, context={'request': request})
 
-    title = request.POST.get('title')
-    description = request.POST.get('description')
-    cover_file = request.FILES.get('cover')
+    if serializer.is_valid():
+        book = serializer.save()
+        return JsonResponse({'success': True, 'book_id': book.id})
+    else:
+        return JsonResponse({'error': serializer.errors}, status=400)
 
-    if not title or not description or not cover_file:
-        return JsonResponse({'error': 'Необходимы title, description и cover'}, status=400)
 
-    # Создаем книгу
-    book = Book.objects.create(
-        title=title,
-        description=description,
-        author=user,
-        is_visible=True,
-        hidden_comment=''
-    )
+class BookListView(APIView):
+    permission_classes = [AllowAny]
 
-    # Сохраняем обложку
-    book_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id))
-    os.makedirs(book_dir, exist_ok=True)
-    cover_path = os.path.join(book_dir, 'cover.jpg')
-    with open(cover_path, 'wb') as f:
-        for chunk in cover_file.chunks():
-            f.write(chunk)
-
-    book.cover = f"/static/books/{book.id}/cover.jpg"
-    book.save()
-
-    return JsonResponse({'success': True, 'book_id': book.id})
-
+    def get(self, request):
+        books = Book.objects.filter(is_visible=True).select_related('author').prefetch_related('genres')
+        serializer = BookSerializer(books, many=True)
+        return Response(serializer.data)

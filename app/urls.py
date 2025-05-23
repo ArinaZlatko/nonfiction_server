@@ -8,5 +8,7 @@ urlpatterns = [
     path('login/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('token/refresh/', MyTokenRefreshView.as_view(), name='token_refresh'),
     path('logout/', user_logout, name='user_logout'),
+    path('genres/', GenreListView.as_view()),
+    path('books/', BookListView.as_view(), name='get_books'),
     path('books/upload/', upload_book, name='upload_book'),
 ]

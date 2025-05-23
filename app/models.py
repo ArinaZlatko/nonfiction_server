@@ -23,18 +23,37 @@ class User(AbstractUser):
         return f"{self.get_full_name()} ({self.role})"
 
 
+# --- Жанр ---
+class Genre(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    description = models.TextField(blank=True)
+    
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
 # --- Книга ---
 class Book(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
+    genres = models.ManyToManyField(Genre, related_name='books')
+
     is_visible = models.BooleanField(default=True)
     hidden_comment = models.TextField(blank=True)
     cover = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return self.title
+
+    def clean(self):
+        super().clean()
+        if not self.genres.exists():
+            from django.core.exceptions import ValidationError
+            raise ValidationError("У книги должен быть хотя бы один жанр.")
 
 
 # --- Глава ---
