@@ -85,3 +85,26 @@ class BookListView(APIView):
         books = Book.objects.filter(is_visible=True).select_related('author').prefetch_related('genres')
         serializer = BookSerializer(books, many=True)
         return Response(serializer.data)
+    
+
+class BookDetailView(generics.RetrieveAPIView):
+    queryset = Book.objects.prefetch_related('genres', 'chapters').select_related('author')
+    serializer_class = BookDetailSerializer
+    lookup_field = 'id'
+    
+
+class ChapterCreateView(APIView):
+    def post(self, request, book_id):
+        data = request.data.copy()
+        data['book'] = book_id
+
+        serializer = ChapterCreateSerializer(data=data)
+        if serializer.is_valid():
+            chapter = serializer.save()
+            return Response({
+                'id': chapter.id,
+                'message': 'Глава успешно добавлена'
+            }, status=status.HTTP_201_CREATED)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    

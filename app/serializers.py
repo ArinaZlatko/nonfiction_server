@@ -87,3 +87,51 @@ class BookSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
         fields = ['id', 'title', 'description', 'author', 'genres', 'cover']
+        
+        
+class ChapterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Chapter
+        fields = ['title', 'order']
+
+
+class BookDetailSerializer(serializers.ModelSerializer):
+    author = serializers.StringRelatedField()
+    genres = serializers.StringRelatedField(many=True)
+    chapters = ChapterSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Book
+        fields = ['title', 'description', 'author', 'genres', 'cover', 'chapters']
+        
+
+class ChapterImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChapterImage
+        fields = ['id', 'image']
+
+
+class ChapterCreateSerializer(serializers.ModelSerializer):
+    images = serializers.ListField(
+        child=serializers.ImageField(),
+        write_only=True,
+        required=False
+    )
+
+    class Meta:
+        model = Chapter
+        fields = ['id', 'book', 'title', 'content', 'order', 'images']
+
+    def create(self, validated_data):
+        images_data = validated_data.pop('images', [])
+        book = validated_data['book']
+        new_order = validated_data['order']
+
+        # Сдвигаем главы вправо
+        Chapter.objects.filter(book=book, order__gte=new_order).update(order=models.F('order') + 1)
+
+        chapter = Chapter.objects.create(**validated_data)
+        for image in images_data:
+            ChapterImage.objects.create(chapter=chapter, image=image)
+
+        return chapter

@@ -10,5 +10,7 @@ urlpatterns = [
     path('logout/', user_logout, name='user_logout'),
     path('genres/', GenreListView.as_view()),
     path('books/', BookListView.as_view(), name='get_books'),
+    path('books/<int:id>/', BookDetailView.as_view(), name='book-detail'),
+    path('api/books/<int:book_id>/chapter/upload', ChapterCreateView.as_view(), name='chapter-create'),
     path('books/upload/', upload_book, name='upload_book'),
 ]

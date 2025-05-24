@@ -1,3 +1,4 @@
+import os
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.utils import timezone
@@ -41,10 +42,10 @@ class Book(models.Model):
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     genres = models.ManyToManyField(Genre, related_name='books')
+    cover = models.CharField(max_length=255, blank=True)
 
     is_visible = models.BooleanField(default=True)
     hidden_comment = models.TextField(blank=True)
-    cover = models.CharField(max_length=255, blank=True)
 
     def __str__(self):
         return self.title
@@ -56,9 +57,14 @@ class Book(models.Model):
             raise ValidationError("У книги должен быть хотя бы один жанр.")
 
 
+# --- Путь до изображений ---
+def chapter_image_upload_path(instance, filename):
+    return os.path.join('books', str(instance.chapter.book.id), 'chapters', str(instance.chapter.id), filename)
+
+
 # --- Глава ---
 class Chapter(models.Model):
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='chapters')
+    book = models.ForeignKey('Book', on_delete=models.CASCADE, related_name='chapters')
     title = models.CharField(max_length=255)
     content = models.TextField()
     order = models.PositiveIntegerField(default=1)
@@ -69,6 +75,15 @@ class Chapter(models.Model):
 
     def __str__(self):
         return f"{self.book.title} - {self.title}"
+
+
+# --- Изображения главы ---
+class ChapterImage(models.Model):
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to=chapter_image_upload_path)
+
+    def __str__(self):
+        return f"Image for {self.chapter.title}"
 
 
 # --- Комментарий ---
