@@ -57,11 +57,6 @@ class Book(models.Model):
             raise ValidationError("У книги должен быть хотя бы один жанр.")
 
 
-# --- Путь до изображений ---
-def chapter_image_upload_path(instance, filename):
-    return os.path.join('books', str(instance.chapter.book.id), 'chapters', str(instance.chapter.id), filename)
-
-
 # --- Глава ---
 class Chapter(models.Model):
     book = models.ForeignKey('Book', on_delete=models.CASCADE, related_name='chapters')
@@ -77,13 +72,24 @@ class Chapter(models.Model):
         return f"{self.book.title} - {self.title}"
 
 
-# --- Изображения главы ---
+# --- Путь до изображений ---
+def chapter_image_upload_path(instance, filename):
+    return os.path.join('books', str(instance.chapter.book.id), 'chapters', str(instance.chapter.id), filename)
+
+
+# --- Изображения ---
 class ChapterImage(models.Model):
     chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, related_name='images')
     image = models.ImageField(upload_to=chapter_image_upload_path)
+    caption = models.CharField(max_length=255, blank=True)
+    order = models.PositiveIntegerField(default=1)
 
+    class Meta:
+        ordering = ['order']
+        unique_together = ('chapter', 'order')
+        
     def __str__(self):
-        return f"Image for {self.chapter.title}"
+        return f"{self.chapter.title} - Image {self.order}: {self.caption or self.image.name}"
 
 
 # --- Комментарий ---

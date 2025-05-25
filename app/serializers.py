@@ -112,7 +112,6 @@ class ChapterCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         book = self.context['book']
-        # Получаем максимальный order и прибавляем 1
         last_order = Chapter.objects.filter(book=book).aggregate(models.Max('order'))['order__max'] or 0
         validated_data['book'] = book
         validated_data['order'] = last_order + 1
