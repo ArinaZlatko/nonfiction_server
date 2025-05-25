@@ -94,17 +94,25 @@ class BookDetailView(generics.RetrieveAPIView):
     
 
 class ChapterCreateView(APIView):
-    def post(self, request, book_id):
-        data = request.data.copy()
-        data['book'] = book_id
+    permission_classes = [IsAuthenticated]
 
-        serializer = ChapterCreateSerializer(data=data)
+    def post(self, request, book_id):
+        try:
+            book = Book.objects.get(pk=book_id)
+        except Book.DoesNotExist:
+            return Response({'detail': 'Книга не найдена'}, status=status.HTTP_404_NOT_FOUND)
+
+        serializer = ChapterCreateSerializer(data=request.data, context={'book': book})
         if serializer.is_valid():
             chapter = serializer.save()
+
+            images = request.FILES.getlist('images')
+            for image in images:
+                ChapterImage.objects.create(chapter=chapter, image=image)
+
             return Response({
                 'id': chapter.id,
                 'message': 'Глава успешно добавлена'
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
