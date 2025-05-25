@@ -92,7 +92,7 @@ class BookSerializer(serializers.ModelSerializer):
 class ChapterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chapter
-        fields = ['title', 'order']
+        fields = ['id', 'title', 'order']
 
 
 class BookDetailSerializer(serializers.ModelSerializer):
@@ -102,7 +102,7 @@ class BookDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Book
-        fields = ['title', 'description', 'author', 'genres', 'cover', 'chapters']
+        fields = ['id', 'title', 'description', 'author', 'genres', 'cover', 'chapters']
 
 
 class ChapterCreateSerializer(serializers.ModelSerializer):
@@ -116,3 +116,17 @@ class ChapterCreateSerializer(serializers.ModelSerializer):
         validated_data['book'] = book
         validated_data['order'] = last_order + 1
         return Chapter.objects.create(**validated_data)
+    
+    
+class ChapterImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChapterImage
+        fields = ['id', 'image', 'caption', 'order']
+
+
+class ChapterDetailSerializer(serializers.ModelSerializer):
+    images = ChapterImageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'content', 'order', 'images']

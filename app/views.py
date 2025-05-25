@@ -7,6 +7,7 @@ from rest_framework import generics
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
+from rest_framework.exceptions import NotFound
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.http import JsonResponse
@@ -147,3 +148,20 @@ class ChapterCreateView(APIView):
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ChapterDetailView(generics.RetrieveAPIView):
+    serializer_class = ChapterDetailSerializer
+
+    def get_queryset(self):
+        return Chapter.objects.prefetch_related('images')
+
+    def get_object(self):
+        queryset = self.get_queryset()
+        book_id = self.kwargs['book_id']
+        chapter_id = self.kwargs['chapter_id']
+        try:
+            return queryset.get(id=chapter_id, book_id=book_id)
+        except Chapter.DoesNotExist:
+            raise NotFound('Chapter not found')
+        
