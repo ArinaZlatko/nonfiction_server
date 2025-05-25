@@ -87,3 +87,46 @@ class BookSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
         fields = ['id', 'title', 'description', 'author', 'genres', 'cover']
+        
+        
+class ChapterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'order']
+
+
+class BookDetailSerializer(serializers.ModelSerializer):
+    author = serializers.StringRelatedField()
+    genres = serializers.StringRelatedField(many=True)
+    chapters = ChapterSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Book
+        fields = ['id', 'title', 'description', 'author', 'genres', 'cover', 'chapters']
+
+
+class ChapterCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'content']
+
+    def create(self, validated_data):
+        book = self.context['book']
+        last_order = Chapter.objects.filter(book=book).aggregate(models.Max('order'))['order__max'] or 0
+        validated_data['book'] = book
+        validated_data['order'] = last_order + 1
+        return Chapter.objects.create(**validated_data)
+    
+    
+class ChapterImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChapterImage
+        fields = ['id', 'image', 'caption', 'order']
+
+
+class ChapterDetailSerializer(serializers.ModelSerializer):
+    images = ChapterImageSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'content', 'order', 'images']
