@@ -29,7 +29,21 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
     
     
-class BookCreateSerializer(serializers.ModelSerializer):
+# Метод сохранения обложки книги
+def save_cover_file(book, cover_file):
+    book_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id))
+    os.makedirs(book_dir, exist_ok=True)
+    cover_path = os.path.join(book_dir, 'cover.jpg')
+
+    with open(cover_path, 'wb') as f:
+        for chunk in cover_file.chunks():
+            f.write(chunk)
+
+    book.cover = f"/static/books/{book.id}/cover.jpg"
+    book.save()
+    
+    
+class BookCESerializer(serializers.ModelSerializer):
     genres = serializers.PrimaryKeyRelatedField(
         queryset=Genre.objects.filter(is_active=True), many=True
     )
@@ -44,7 +58,6 @@ class BookCreateSerializer(serializers.ModelSerializer):
         cover_file = validated_data.pop('cover')
         author = self.context['request'].user
 
-        # Создаем книгу
         book = Book.objects.create(
             author=author,
             is_visible=True,
@@ -52,20 +65,26 @@ class BookCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-        # Сохраняем обложку вручную
-        book_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id))
-        os.makedirs(book_dir, exist_ok=True)
-        cover_path = os.path.join(book_dir, 'cover.jpg')
-
-        with open(cover_path, 'wb') as f:
-            for chunk in cover_file.chunks():
-                f.write(chunk)
-
-        book.cover = f"/static/books/{book.id}/cover.jpg"
-        book.save()
-
+        save_cover_file(book, cover_file)
         book.genres.set(genres)
         return book
+    
+    def update(self, instance, validated_data):
+        genres = validated_data.pop('genres', None)
+        cover_file = validated_data.pop('cover', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if cover_file:
+            save_cover_file(instance, cover_file)
+
+        instance.save()
+
+        if genres is not None:
+            instance.genres.set(genres)
+
+        return instance
 
 
 class GenreSerializer(serializers.ModelSerializer):

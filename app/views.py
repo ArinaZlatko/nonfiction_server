@@ -7,7 +7,7 @@ from rest_framework import generics
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from django.contrib.auth import get_user_model
-from rest_framework.exceptions import NotFound
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from django.http import JsonResponse
@@ -70,7 +70,7 @@ class GenreListView(APIView):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_book(request):
-    serializer = BookCreateSerializer(data=request.data, context={'request': request})
+    serializer = BookCESerializer(data=request.data, context={'request': request})
 
     if serializer.is_valid():
         book = serializer.save()
@@ -165,3 +165,65 @@ class ChapterDetailView(generics.RetrieveAPIView):
         except Chapter.DoesNotExist:
             raise NotFound('Chapter not found')
         
+        
+# --- Редактирование книги ---
+class BookUpdateView(generics.UpdateAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookCESerializer
+    lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        book = self.get_object()
+        if book.author != self.request.user:
+            raise PermissionDenied("Вы не являетесь автором этой книги.")
+        return serializer.save()
+
+
+# --- Удаление книги ---
+class BookDeleteView(generics.DestroyAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookDetailSerializer
+    lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        if instance.author != self.request.user:
+            raise PermissionDenied("Вы не можете удалить эту книгу.")
+        return super().perform_destroy(instance)
+
+
+# --- Редактирование главы ---
+class ChapterUpdateView(generics.UpdateAPIView):
+    serializer_class = ChapterCreateSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Chapter.objects.filter(book__id=self.kwargs['book_id'])
+
+    def get_object(self):
+        try:
+            chapter = self.get_queryset().get(id=self.kwargs['chapter_id'])
+            if chapter.book.author != self.request.user:
+                raise PermissionDenied("Вы не можете редактировать эту главу.")
+            return chapter
+        except Chapter.DoesNotExist:
+            raise NotFound("Глава не найдена")
+
+
+# --- Удаление главы ---
+class ChapterDeleteView(generics.DestroyAPIView):
+    serializer_class = ChapterDetailSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Chapter.objects.filter(book__id=self.kwargs['book_id'])
+
+    def get_object(self):
+        try:
+            chapter = self.get_queryset().get(id=self.kwargs['chapter_id'])
+            if chapter.book.author != self.request.user:
+                raise PermissionDenied("Вы не можете удалить эту главу.")
+            return chapter
+        except Chapter.DoesNotExist:
+            raise NotFound("Глава не найдена")
