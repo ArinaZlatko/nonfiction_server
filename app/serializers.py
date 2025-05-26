@@ -122,12 +122,20 @@ class BookDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
         fields = ['id', 'title', 'description', 'author', 'genres', 'cover', 'chapters']
+    
+    
+class ChapterImageSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ChapterImage
+        fields = ['id', 'image', 'caption', 'order']
+        
 
-
-class ChapterCreateSerializer(serializers.ModelSerializer):
+class ChapterCESerializer(serializers.ModelSerializer):
+    images = ChapterImageSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Chapter
-        fields = ['id', 'title', 'content']
+        fields = ['id', 'title', 'content', 'images']
 
     def create(self, validated_data):
         book = self.context['book']
@@ -135,12 +143,6 @@ class ChapterCreateSerializer(serializers.ModelSerializer):
         validated_data['book'] = book
         validated_data['order'] = last_order + 1
         return Chapter.objects.create(**validated_data)
-    
-    
-class ChapterImageSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = ChapterImage
-        fields = ['id', 'image', 'caption', 'order']
 
 
 class ChapterDetailSerializer(serializers.ModelSerializer):

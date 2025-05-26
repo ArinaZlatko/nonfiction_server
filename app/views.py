@@ -103,7 +103,7 @@ class ChapterCreateView(APIView):
         except Book.DoesNotExist:
             return Response({'detail': 'Книга не найдена'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ChapterCreateSerializer(data=request.data, context={'book': book})
+        serializer = ChapterCESerializer(data=request.data, context={'book': book})
         if serializer.is_valid():
             chapter = serializer.save()
 
@@ -195,7 +195,7 @@ class BookDeleteView(generics.DestroyAPIView):
 
 # --- Редактирование главы ---
 class ChapterUpdateView(generics.UpdateAPIView):
-    serializer_class = ChapterCreateSerializer
+    serializer_class = ChapterCESerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
