@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 from rest_framework import generics
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
+from rest_framework.parsers import MultiPartParser, FormParser
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.decorators import api_view, permission_classes
@@ -197,6 +198,7 @@ class BookDeleteView(generics.DestroyAPIView):
 class ChapterUpdateView(generics.UpdateAPIView):
     serializer_class = ChapterCESerializer
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         return Chapter.objects.filter(book__id=self.kwargs['book_id'])
@@ -209,6 +211,11 @@ class ChapterUpdateView(generics.UpdateAPIView):
             return chapter
         except Chapter.DoesNotExist:
             raise NotFound("Глава не найдена")
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
 
 
 # --- Удаление главы ---
