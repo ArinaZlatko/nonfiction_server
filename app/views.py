@@ -1,16 +1,16 @@
-from rest_framework.permissions import AllowAny
+from rest_framework.permissions import AllowAny, IsAuthenticated, IsAuthenticatedOrReadOnly
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.views import APIView
 from rest_framework import generics
+from rest_framework.generics import ListAPIView
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.parsers import MultiPartParser, FormParser
+from rest_framework.parsers import MultiPartParser
 from django.contrib.auth import get_user_model
 from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import IsAuthenticated
 from django.http import JsonResponse
 from django.conf import settings
 from rest_framework.response import Response
@@ -242,3 +242,23 @@ class ChapterDeleteView(generics.DestroyAPIView):
         except Chapter.DoesNotExist:
             raise NotFound("Глава не найдена")
  
+
+# --- Создание комментария ---
+class CreateCommentView(generics.CreateAPIView):
+    serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        return Comment.objects.filter(book__id=self.kwargs['book_id'])
+
+    def perform_create(self, serializer):
+        book_id = self.kwargs['id']
+        serializer.save(user=self.request.user, book_id=book_id)
+
+# --- Комментарии к книге ---
+class BookCommentsListView(ListAPIView):
+    serializer_class = CommentSerializer
+
+    def get_queryset(self):
+        book_id = self.kwargs.get('id')
+        return Comment.objects.filter(book_id=book_id).order_by('-created_at')
