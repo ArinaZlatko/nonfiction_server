@@ -68,6 +68,7 @@ class GenreListView(APIView):
         return Response(serializer.data)
     
     
+# --- Добавление книги ---
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def upload_book(request):
@@ -78,8 +79,23 @@ def upload_book(request):
         return JsonResponse({'success': True, 'book_id': book.id})
     else:
         return JsonResponse({'error': serializer.errors}, status=400)
+    
+        
+# --- Редактирование книги ---
+class BookUpdateView(generics.UpdateAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookCESerializer
+    lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        book = self.get_object()
+        if book.author != self.request.user:
+            raise PermissionDenied("Вы не являетесь автором этой книги.")
+        return serializer.save()
 
 
+# --- Отображение карточкой ---
 class BookListView(APIView):
     permission_classes = [AllowAny]
 
@@ -89,12 +105,26 @@ class BookListView(APIView):
         return Response(serializer.data)
     
 
+# --- Детальное отображение ---
 class BookDetailView(generics.RetrieveAPIView):
     queryset = Book.objects.prefetch_related('genres', 'chapters').select_related('author')
     serializer_class = BookDetailSerializer
     lookup_field = 'id'
     
 
+# --- Удаление книги ---
+class BookDeleteView(generics.DestroyAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookDetailSerializer
+    lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        if instance.author != self.request.user:
+            raise PermissionDenied("Вы не можете удалить эту книгу.")
+        return super().perform_destroy(instance)
+    
+    
 # --- Создание главы ---
 class ChapterCreateView(APIView):
     permission_classes = [IsAuthenticated]
@@ -174,7 +204,7 @@ class ChapterDetailView(generics.RetrieveAPIView):
 
 # --- Редактирование главы ---
 class ChapterUpdateView(generics.UpdateAPIView):
-    serializer_class = ChapterCESerializer
+    serializer_class = ChapterUpdateSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -211,31 +241,4 @@ class ChapterDeleteView(generics.DestroyAPIView):
             return chapter
         except Chapter.DoesNotExist:
             raise NotFound("Глава не найдена")
-        
-        
-# --- Редактирование книги ---
-class BookUpdateView(generics.UpdateAPIView):
-    queryset = Book.objects.all()
-    serializer_class = BookCESerializer
-    lookup_field = 'id'
-    permission_classes = [IsAuthenticated]
-
-    def perform_update(self, serializer):
-        book = self.get_object()
-        if book.author != self.request.user:
-            raise PermissionDenied("Вы не являетесь автором этой книги.")
-        return serializer.save()
-
-
-# --- Удаление книги ---
-class BookDeleteView(generics.DestroyAPIView):
-    queryset = Book.objects.all()
-    serializer_class = BookDetailSerializer
-    lookup_field = 'id'
-    permission_classes = [IsAuthenticated]
-
-    def perform_destroy(self, instance):
-        if instance.author != self.request.user:
-            raise PermissionDenied("Вы не можете удалить эту книгу.")
-        return super().perform_destroy(instance)
-
+ 

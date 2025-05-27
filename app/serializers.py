@@ -42,20 +42,30 @@ def save_cover_file(book, cover_file):
     book.cover = f"/static/books/{book.id}/cover.jpg"
     book.save()
     
-    
+
+class GenreSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Genre
+        fields = ['id', 'name']
+        
+        
 class BookCESerializer(serializers.ModelSerializer):
-    genres = serializers.PrimaryKeyRelatedField(
-        queryset=Genre.objects.filter(is_active=True), many=True
+    genres = GenreSerializer(many=True, read_only=True)
+    genre_ids = serializers.PrimaryKeyRelatedField(
+        many=True,
+        queryset=Genre.objects.all(),
+        write_only=True,
+        source='genres'
     )
-    cover = serializers.ImageField(write_only=True)
+    cover = serializers.ImageField(required=False, allow_null=True)  # <- Это ключевой момент
 
     class Meta:
         model = Book
-        fields = ['title', 'description', 'cover', 'genres']
+        fields = ['title', 'description', 'cover', 'genres', 'genre_ids']
 
     def create(self, validated_data):
-        genres = validated_data.pop('genres')
-        cover_file = validated_data.pop('cover')
+        genres = validated_data.pop('genres', [])
+        cover_file = validated_data.pop('cover', None)
         author = self.context['request'].user
 
         book = Book.objects.create(
@@ -65,32 +75,25 @@ class BookCESerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-        save_cover_file(book, cover_file)
-        book.genres.set(genres)
+        if cover_file:
+            save_cover_file(book, cover_file)
+
+        if genres:
+            book.genres.set(genres)
+
         return book
-    
+
     def update(self, instance, validated_data):
         genres = validated_data.pop('genres', None)
-        cover_file = validated_data.pop('cover', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
-        if cover_file:
-            save_cover_file(instance, cover_file)
-
-        instance.save()
-
         if genres is not None:
             instance.genres.set(genres)
 
+        instance.save()
         return instance
-
-
-class GenreSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Genre
-        fields = ['id', 'name']
 
 
 class AuthorSerializer(serializers.ModelSerializer):
@@ -116,7 +119,7 @@ class ChapterSerializer(serializers.ModelSerializer):
 
 class BookDetailSerializer(serializers.ModelSerializer):
     author = serializers.StringRelatedField()
-    genres = serializers.StringRelatedField(many=True)
+    genres = GenreSerializer(many=True)
     chapters = ChapterSerializer(many=True, read_only=True)
 
     class Meta:
@@ -145,7 +148,7 @@ class ChapterUploadSerializer(serializers.Serializer):
     content = serializers.CharField()
 
 
-class ChapterCESerializer(serializers.ModelSerializer):
+class ChapterUpdateSerializer(serializers.ModelSerializer):
     images = ChapterImageSerializer(many=True)
 
     class Meta:
