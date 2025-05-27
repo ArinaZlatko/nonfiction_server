@@ -181,3 +181,37 @@ class ChapterDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chapter
         fields = ['id', 'title', 'content', 'order', 'images']
+
+
+# --- Просмотр комментария ---
+class CommentSerializer(serializers.ModelSerializer):
+    user = serializers.StringRelatedField(read_only=True)
+
+    class Meta:
+        model = Comment
+        fields = ['id', 'user', 'content', 'rating', 'created_at']
+
+
+# --- Создание комментария ---
+class CreateCommentSerializer(serializers.ModelSerializer):
+    user = serializers.HiddenField(default=serializers.CurrentUserDefault())
+
+    class Meta:
+        model = Comment
+        fields = ['id', 'user', 'book', 'content', 'rating', 'created_at']
+        read_only_fields = ['id', 'created_at']
+
+    def validate_rating(self, value):
+        if not (1 <= value <= 5):
+            raise serializers.ValidationError("Оценка должна быть от 1 до 5.")
+        return value
+
+    def validate(self, data):
+        user = self.context['request'].user
+        book = data.get('book')
+
+        if self.instance is None and Comment.objects.filter(user=user, book=book).exists():
+            raise serializers.ValidationError("Вы уже оставляли комментарий к этой книге.")
+
+        return data
+    

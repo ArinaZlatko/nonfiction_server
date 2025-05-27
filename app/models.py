@@ -1,6 +1,7 @@
 import os
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.forms import ValidationError
 from django.utils import timezone
 from django.conf import settings
 
@@ -91,35 +92,26 @@ class ChapterImage(models.Model):
         return f"{self.chapter.title} - Image {self.order}: {self.caption or self.image.name}"
 
 
-# --- Комментарий ---
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, null=True, blank=True, related_name='comments')
-    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, null=True, blank=True, related_name='comments')
+    book = models.ForeignKey('Book', on_delete=models.CASCADE, related_name='comments')
     content = models.TextField()
+    rating = models.PositiveSmallIntegerField()
     created_at = models.DateTimeField(auto_now_add=True)
-
-    def clean(self):
-        from django.core.exceptions import ValidationError
-        if not self.book and not self.chapter:
-            raise ValidationError("Комментарий должен быть к книге или к главе.")
-
-    def __str__(self):
-        target = self.book or self.chapter
-        return f"Комментарий от {self.user} к {target}"
-
-
-# --- Оценка книги ---
-class Rating(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='ratings')
-    value = models.PositiveSmallIntegerField()  # 1-5
 
     class Meta:
         unique_together = ('user', 'book')
 
+    def clean(self):
+        if not self.content:
+            raise ValidationError("Комментарий не может быть пустым.")
+        if self.rating is None:
+            raise ValidationError("Оценка обязательна.")
+        if not (1 <= self.rating <= 5):
+            raise ValidationError("Оценка должна быть от 1 до 5.")
+
     def __str__(self):
-        return f"{self.user} поставил {self.value} для {self.book}"
+        return f"Комментарий от {self.user} к книге '{self.book}' с оценкой {self.rating}"
 
 
 # --- Избранное ---
