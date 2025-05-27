@@ -29,7 +29,21 @@ class RegisterSerializer(serializers.ModelSerializer):
         return user
     
     
-class BookCreateSerializer(serializers.ModelSerializer):
+# Метод сохранения обложки книги
+def save_cover_file(book, cover_file):
+    book_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id))
+    os.makedirs(book_dir, exist_ok=True)
+    cover_path = os.path.join(book_dir, 'cover.jpg')
+
+    with open(cover_path, 'wb') as f:
+        for chunk in cover_file.chunks():
+            f.write(chunk)
+
+    book.cover = f"/static/books/{book.id}/cover.jpg"
+    book.save()
+    
+    
+class BookCESerializer(serializers.ModelSerializer):
     genres = serializers.PrimaryKeyRelatedField(
         queryset=Genre.objects.filter(is_active=True), many=True
     )
@@ -44,7 +58,6 @@ class BookCreateSerializer(serializers.ModelSerializer):
         cover_file = validated_data.pop('cover')
         author = self.context['request'].user
 
-        # Создаем книгу
         book = Book.objects.create(
             author=author,
             is_visible=True,
@@ -52,20 +65,26 @@ class BookCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-        # Сохраняем обложку вручную
-        book_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id))
-        os.makedirs(book_dir, exist_ok=True)
-        cover_path = os.path.join(book_dir, 'cover.jpg')
-
-        with open(cover_path, 'wb') as f:
-            for chunk in cover_file.chunks():
-                f.write(chunk)
-
-        book.cover = f"/static/books/{book.id}/cover.jpg"
-        book.save()
-
+        save_cover_file(book, cover_file)
         book.genres.set(genres)
         return book
+    
+    def update(self, instance, validated_data):
+        genres = validated_data.pop('genres', None)
+        cover_file = validated_data.pop('cover', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        if cover_file:
+            save_cover_file(instance, cover_file)
+
+        instance.save()
+
+        if genres is not None:
+            instance.genres.set(genres)
+
+        return instance
 
 
 class GenreSerializer(serializers.ModelSerializer):
@@ -103,25 +122,54 @@ class BookDetailSerializer(serializers.ModelSerializer):
     class Meta:
         model = Book
         fields = ['id', 'title', 'description', 'author', 'genres', 'cover', 'chapters']
-
-
-class ChapterCreateSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Chapter
-        fields = ['id', 'title', 'content']
-
-    def create(self, validated_data):
-        book = self.context['book']
-        last_order = Chapter.objects.filter(book=book).aggregate(models.Max('order'))['order__max'] or 0
-        validated_data['book'] = book
-        validated_data['order'] = last_order + 1
-        return Chapter.objects.create(**validated_data)
     
     
 class ChapterImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChapterImage
         fields = ['id', 'image', 'caption', 'order']
+        extra_kwargs = {
+            'image': {'read_only': True}
+        }
+
+    def to_internal_value(self, data):
+        return {
+            'id': data.get('id'),
+            'caption': data.get('caption'),
+            'order': data.get('order')
+        }
+ 
+        
+class ChapterUploadSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    content = serializers.CharField()
+
+
+class ChapterCESerializer(serializers.ModelSerializer):
+    images = ChapterImageSerializer(many=True)
+
+    class Meta:
+        model = Chapter
+        fields = ['id', 'title', 'content', 'images']
+
+    def update(self, instance, validated_data):
+        instance.title = validated_data.get('title', instance.title)
+        instance.content = validated_data.get('content', instance.content)
+        instance.save()
+
+        images_data = validated_data.get('images', [])
+
+        for img_data in images_data:
+            image_id = img_data.get('id')
+            try:
+                chapter_image = ChapterImage.objects.get(id=image_id, chapter=instance)
+                chapter_image.caption = img_data.get('caption', chapter_image.caption)
+                chapter_image.order = img_data.get('order', chapter_image.order)
+                chapter_image.save()
+            except ChapterImage.DoesNotExist:
+                continue
+
+        return instance
 
 
 class ChapterDetailSerializer(serializers.ModelSerializer):
