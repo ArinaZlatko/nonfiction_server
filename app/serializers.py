@@ -128,71 +128,46 @@ class ChapterImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChapterImage
         fields = ['id', 'image', 'caption', 'order']
+        extra_kwargs = {
+            'image': {'read_only': True}
+        }
+
+    def to_internal_value(self, data):
+        return {
+            'id': data.get('id'),
+            'caption': data.get('caption'),
+            'order': data.get('order')
+        }
+ 
         
+class ChapterUploadSerializer(serializers.Serializer):
+    title = serializers.CharField()
+    content = serializers.CharField()
+
 
 class ChapterCESerializer(serializers.ModelSerializer):
-    images = ChapterImageSerializer(many=True, read_only=True)
+    images = ChapterImageSerializer(many=True)
 
     class Meta:
         model = Chapter
         fields = ['id', 'title', 'content', 'images']
 
-    def create(self, validated_data):
-        book = self.context['book']
-        last_order = Chapter.objects.filter(book=book).aggregate(models.Max('order'))['order__max'] or 0
-        validated_data['book'] = book
-        validated_data['order'] = last_order + 1
-        return Chapter.objects.create(**validated_data)
-
     def update(self, instance, validated_data):
-        request = self.context['request']
-
-        # Обновление текстовых полей
         instance.title = validated_data.get('title', instance.title)
         instance.content = validated_data.get('content', instance.content)
         instance.save()
 
-        # Удаление изображений
-        deleted_ids = request.data.getlist('deleted_image_ids')
-        if deleted_ids:
-            for image_id in deleted_ids:
-                try:
-                    img = ChapterImage.objects.get(id=image_id, chapter=instance)
-                    # Удалить файл изображения с диска
-                    if img.image and os.path.isfile(img.image.path):
-                        os.remove(img.image.path)
-                    img.delete()
-                except ChapterImage.DoesNotExist:
-                    continue
+        images_data = validated_data.get('images', [])
 
-        # Обновление существующих изображений
-        existing_ids = request.data.getlist('existing_image_ids')
-        existing_captions = request.data.getlist('existing_captions')
-        existing_orders = request.data.getlist('existing_orders')
-
-        for idx, img_id in enumerate(existing_ids):
+        for img_data in images_data:
+            image_id = img_data.get('id')
             try:
-                image = ChapterImage.objects.get(id=img_id, chapter=instance)
-                image.caption = existing_captions[idx]
-                image.order = int(existing_orders[idx])
-                image.save()
-            except (ChapterImage.DoesNotExist, IndexError):
+                chapter_image = ChapterImage.objects.get(id=image_id, chapter=instance)
+                chapter_image.caption = img_data.get('caption', chapter_image.caption)
+                chapter_image.order = img_data.get('order', chapter_image.order)
+                chapter_image.save()
+            except ChapterImage.DoesNotExist:
                 continue
-
-        # Добавление новых изображений
-        new_images = request.FILES.getlist('images')
-        new_captions = request.data.getlist('captions')
-        new_orders = request.data.getlist('orders')
-
-        for idx, img_file in enumerate(new_images):
-            caption = new_captions[idx] if idx < len(new_captions) else ''
-            order = int(new_orders[idx]) if idx < len(new_orders) else 1
-            ChapterImage.objects.create(
-                chapter=instance,
-                image=img_file,
-                caption=caption,
-                order=order,
-            )
 
         return instance
 

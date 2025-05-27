@@ -86,7 +86,6 @@ class ChapterImage(models.Model):
 
     class Meta:
         ordering = ['order']
-        unique_together = ('chapter', 'order')
         
     def __str__(self):
         return f"{self.chapter.title} - Image {self.order}: {self.caption or self.image.name}"

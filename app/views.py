@@ -95,8 +95,10 @@ class BookDetailView(generics.RetrieveAPIView):
     lookup_field = 'id'
     
 
+# --- Создание главы ---
 class ChapterCreateView(APIView):
     permission_classes = [IsAuthenticated]
+    parser_classes = [MultiPartParser]
 
     def post(self, request, book_id):
         try:
@@ -104,53 +106,56 @@ class ChapterCreateView(APIView):
         except Book.DoesNotExist:
             return Response({'detail': 'Книга не найдена'}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = ChapterCESerializer(data=request.data, context={'book': book})
+        serializer = ChapterUploadSerializer(data=request.data)
         if serializer.is_valid():
-            chapter = serializer.save()
+            title = serializer.validated_data['title']
+            content = serializer.validated_data['content']
+
+            # Найдём следующий order
+            last_order = Chapter.objects.filter(book=book).aggregate(models.Max('order'))['order__max'] or 0
+            order = last_order + 1
+
+            # Создаём главу с уникальным порядком
+            chapter = Chapter.objects.create(book=book, title=title, content=content, order=order)
 
             images = request.FILES.getlist('images')
             captions = request.data.getlist('captions')
             orders = request.data.getlist('orders')
 
-            image_urls = []
+            chapter_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id), 'chapters', str(chapter.id))
+            os.makedirs(chapter_dir, exist_ok=True)
 
-            if images:
-                chapter_dir = os.path.join(settings.BASE_DIR, 'static', 'books', str(book.id), 'chapters', str(chapter.id))
-                os.makedirs(chapter_dir, exist_ok=True)
+            for i, image in enumerate(images):
+                caption = captions[i] if i < len(captions) else ''
+                image_order = int(orders[i]) if i < len(orders) and orders[i].isdigit() else None
 
-                for i, image in enumerate(images):
-                    caption = captions[i] if i < len(captions) else ''
-                    order = int(orders[i]) if i < len(orders) and orders[i].isdigit() else None
+                if image_order is None:
+                    last_image_order = ChapterImage.objects.filter(chapter=chapter).aggregate(models.Max('order'))['order__max'] or 0
+                    image_order = last_image_order + 1
 
-                    image_path = os.path.join(chapter_dir, image.name)
-                    with open(image_path, 'wb+') as f:
-                        for chunk in image.chunks():
-                            f.write(chunk)
+                image_path = os.path.join(chapter_dir, image.name)
+                with open(image_path, 'wb+') as f:
+                    for chunk in image.chunks():
+                        f.write(chunk)
 
-                    relative_path = f"/static/books/{book.id}/chapters/{chapter.id}/{image.name}"
+                relative_path = f"/static/books/{book.id}/chapters/{chapter.id}/{image.name}"
 
-                    # Если порядок не указан — автоматическая нумерация
-                    if order is None:
-                        last_order = ChapterImage.objects.filter(chapter=chapter).aggregate(models.Max('order'))['order__max'] or 0
-                        order = last_order + 1
-
-                    ChapterImage.objects.create(
-                        chapter=chapter,
-                        image=relative_path,
-                        caption=caption,
-                        order=order
-                    )
-                    image_urls.append(relative_path)
+                ChapterImage.objects.create(
+                    chapter=chapter,
+                    image=relative_path,
+                    caption=caption,
+                    order=image_order
+                )
 
             return Response({
                 'id': chapter.id,
-                'message': 'Глава успешно добавлена',
-                'images': image_urls
+                'message': 'Глава успешно добавлена'
             }, status=status.HTTP_201_CREATED)
 
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+# --- Просмотр главы ---
 class ChapterDetailView(generics.RetrieveAPIView):
     serializer_class = ChapterDetailSerializer
 
@@ -166,39 +171,11 @@ class ChapterDetailView(generics.RetrieveAPIView):
         except Chapter.DoesNotExist:
             raise NotFound('Chapter not found')
         
-        
-# --- Редактирование книги ---
-class BookUpdateView(generics.UpdateAPIView):
-    queryset = Book.objects.all()
-    serializer_class = BookCESerializer
-    lookup_field = 'id'
-    permission_classes = [IsAuthenticated]
-
-    def perform_update(self, serializer):
-        book = self.get_object()
-        if book.author != self.request.user:
-            raise PermissionDenied("Вы не являетесь автором этой книги.")
-        return serializer.save()
-
-
-# --- Удаление книги ---
-class BookDeleteView(generics.DestroyAPIView):
-    queryset = Book.objects.all()
-    serializer_class = BookDetailSerializer
-    lookup_field = 'id'
-    permission_classes = [IsAuthenticated]
-
-    def perform_destroy(self, instance):
-        if instance.author != self.request.user:
-            raise PermissionDenied("Вы не можете удалить эту книгу.")
-        return super().perform_destroy(instance)
-
 
 # --- Редактирование главы ---
 class ChapterUpdateView(generics.UpdateAPIView):
     serializer_class = ChapterCESerializer
     permission_classes = [IsAuthenticated]
-    parser_classes = [MultiPartParser, FormParser]
 
     def get_queryset(self):
         return Chapter.objects.filter(book__id=self.kwargs['book_id'])
@@ -234,3 +211,31 @@ class ChapterDeleteView(generics.DestroyAPIView):
             return chapter
         except Chapter.DoesNotExist:
             raise NotFound("Глава не найдена")
+        
+        
+# --- Редактирование книги ---
+class BookUpdateView(generics.UpdateAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookCESerializer
+    lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def perform_update(self, serializer):
+        book = self.get_object()
+        if book.author != self.request.user:
+            raise PermissionDenied("Вы не являетесь автором этой книги.")
+        return serializer.save()
+
+
+# --- Удаление книги ---
+class BookDeleteView(generics.DestroyAPIView):
+    queryset = Book.objects.all()
+    serializer_class = BookDetailSerializer
+    lookup_field = 'id'
+    permission_classes = [IsAuthenticated]
+
+    def perform_destroy(self, instance):
+        if instance.author != self.request.user:
+            raise PermissionDenied("Вы не можете удалить эту книгу.")
+        return super().perform_destroy(instance)
+
