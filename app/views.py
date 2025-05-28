@@ -255,6 +255,7 @@ class CreateCommentView(generics.CreateAPIView):
         book_id = self.kwargs['id']
         serializer.save(user=self.request.user, book_id=book_id)
 
+
 # --- Комментарии к книге ---
 class BookCommentsListView(ListAPIView):
     serializer_class = CommentSerializer
@@ -262,3 +263,42 @@ class BookCommentsListView(ListAPIView):
     def get_queryset(self):
         book_id = self.kwargs.get('id')
         return Comment.objects.filter(book_id=book_id).order_by('-created_at')
+    
+
+# --- Редактирование комментария ---
+class EditCommentView(generics.UpdateAPIView):
+    serializer_class = EditCommentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        book_id = self.kwargs.get('book_id')
+        comment_id = self.kwargs.get('comment_id')
+
+        try:
+            comment = Comment.objects.get(id=comment_id, book__id=book_id)
+        except Comment.DoesNotExist:
+            raise NotFound("Комментарий не найден.")
+
+        if comment.user != self.request.user:
+            raise PermissionDenied("Вы не можете редактировать чужой комментарий.")
+
+        return comment
+
+
+# --- Удаление комментария ---
+class DeleteCommentView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated]
+
+    def get_object(self):
+        book_id = self.kwargs.get('book_id')
+        comment_id = self.kwargs.get('comment_id')
+
+        try:
+            comment = Comment.objects.get(id=comment_id, book__id=book_id)
+        except Comment.DoesNotExist:
+            raise NotFound("Комментарий не найден.")
+
+        if comment.user != self.request.user:
+            raise PermissionDenied("Вы не можете удалить чужой комментарий.")
+
+        return comment

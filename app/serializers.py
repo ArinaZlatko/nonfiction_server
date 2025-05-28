@@ -215,3 +215,19 @@ class CreateCommentSerializer(serializers.ModelSerializer):
 
         return data
     
+
+# --- Редактирование комментария ---
+class EditCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ['content', 'rating']
+
+    def validate_rating(self, value):
+        if not (1 <= value <= 5):
+            raise serializers.ValidationError("Оценка должна быть от 1 до 5.")
+        return value
+
+    def validate(self, data):
+        if not data.get('content'):
+            raise serializers.ValidationError("Комментарий не может быть пустым.")
+        return data
