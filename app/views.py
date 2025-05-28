@@ -105,11 +105,32 @@ class BookListView(APIView):
         return Response(serializer.data)
     
 
+# --- Книги авторизованного пользователя ---
+class MyBooksView(APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        books = Book.objects.filter(author=request.user).select_related('author').prefetch_related('genres')
+        serializer = BookSerializer(books, many=True)
+        return Response(serializer.data)
+
+
 # --- Детальное отображение ---
 class BookDetailView(generics.RetrieveAPIView):
     queryset = Book.objects.prefetch_related('genres', 'chapters').select_related('author')
     serializer_class = BookDetailSerializer
     lookup_field = 'id'
+    permission_classes = [AllowAny]
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        is_owner = request.user.is_authenticated and instance.author == request.user
+        data['is_owner'] = is_owner
+
+        return Response(data)
     
 
 # --- Удаление книги ---

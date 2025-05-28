@@ -57,7 +57,7 @@ class BookCESerializer(serializers.ModelSerializer):
         write_only=True,
         source='genres'
     )
-    cover = serializers.ImageField(required=False, allow_null=True)  # <- Это ключевой момент
+    cover = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Book
