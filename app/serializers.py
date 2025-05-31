@@ -2,6 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.conf import settings
 import os
 from .models import *
@@ -9,6 +10,18 @@ from .models import *
 
 User = get_user_model()
 
+
+# --- Добавление роли на клиент ---
+class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
+    @classmethod
+    def get_token(cls, user):
+        token = super().get_token(user)
+
+        token['role'] = user.role
+
+        return token
+      
+    
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -57,7 +70,7 @@ class BookCESerializer(serializers.ModelSerializer):
         write_only=True,
         source='genres'
     )
-    cover = serializers.ImageField(required=False, allow_null=True)  # <- Это ключевой момент
+    cover = serializers.ImageField(required=False, allow_null=True)
 
     class Meta:
         model = Book
@@ -215,3 +228,19 @@ class CreateCommentSerializer(serializers.ModelSerializer):
 
         return data
     
+
+# --- Редактирование комментария ---
+class EditCommentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Comment
+        fields = ['content', 'rating']
+
+    def validate_rating(self, value):
+        if not (1 <= value <= 5):
+            raise serializers.ValidationError("Оценка должна быть от 1 до 5.")
+        return value
+
+    def validate(self, data):
+        if not data.get('content'):
+            raise serializers.ValidationError("Комментарий не может быть пустым.")
+        return data

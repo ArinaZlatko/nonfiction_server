@@ -14,8 +14,8 @@ class User(AbstractUser):
     email = models.EmailField(unique=True)
 
     ROLE_CHOICES = (
-        ('reader', 'Reader'),
-        ('writer', 'Writer'),
+        ('reader', 'читатель'),
+        ('writer', 'писатель'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='reader')
 
@@ -92,6 +92,7 @@ class ChapterImage(models.Model):
         return f"{self.chapter.title} - Image {self.order}: {self.caption or self.image.name}"
 
 
+# --- Отзыв ---
 class Comment(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     book = models.ForeignKey('Book', on_delete=models.CASCADE, related_name='comments')
