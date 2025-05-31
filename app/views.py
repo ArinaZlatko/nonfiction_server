@@ -4,7 +4,8 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.views import APIView
 from rest_framework import generics
-from rest_framework.generics import ListAPIView
+from rest_framework_simplejwt.views import TokenObtainPairView
+from rest_framework.permissions import BasePermission
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.parsers import MultiPartParser
@@ -22,14 +23,20 @@ from .models import *
 from .serializers import *
 
 User = get_user_model()
+    
 
-# Регистрация
-@method_decorator(csrf_exempt, name='dispatch')
-class RegisterView(generics.CreateAPIView):
-    serializer_class = RegisterSerializer
-    permission_classes = [AllowAny]
+# --- Проверка роли ---
+class IsWriter(BasePermission):
+    def has_permission(self, request, view):
+        return request.user.is_authenticated and request.user.role == 'writer'
+    
+    
+# --- Добавление роли на клиент ---
+class MyTokenObtainPairView(TokenObtainPairView):
+    serializer_class = MyTokenObtainPairSerializer
 
 
+# --- Логика на обновление токена ---
 class MyTokenRefreshView(TokenRefreshView):
     serializer_class = TokenRefreshSerializer
 
@@ -42,7 +49,15 @@ class MyTokenRefreshView(TokenRefreshView):
             return Response({'error': 'Invalid refresh token'}, status=status.HTTP_401_UNAUTHORIZED)
 
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
+   
     
+# Регистрация
+@method_decorator(csrf_exempt, name='dispatch')
+class RegisterView(generics.CreateAPIView):
+    serializer_class = RegisterSerializer
+    permission_classes = [AllowAny]
+
+
 # Выход
 @csrf_exempt
 def user_logout(request):
@@ -70,7 +85,7 @@ class GenreListView(APIView):
     
 # --- Добавление книги ---
 @api_view(['POST'])
-@permission_classes([IsAuthenticated])
+@permission_classes([IsAuthenticated, IsWriter])
 def upload_book(request):
     serializer = BookCESerializer(data=request.data, context={'request': request})
 
@@ -83,10 +98,10 @@ def upload_book(request):
         
 # --- Редактирование книги ---
 class BookUpdateView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated, IsWriter]
     queryset = Book.objects.all()
     serializer_class = BookCESerializer
     lookup_field = 'id'
-    permission_classes = [IsAuthenticated]
 
     def perform_update(self, serializer):
         book = self.get_object()
@@ -107,7 +122,7 @@ class BookListView(APIView):
 
 # --- Книги авторизованного пользователя ---
 class MyBooksView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsWriter]
 
     def get(self, request):
         books = Book.objects.filter(author=request.user).select_related('author').prefetch_related('genres')
@@ -135,10 +150,10 @@ class BookDetailView(generics.RetrieveAPIView):
 
 # --- Удаление книги ---
 class BookDeleteView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated, IsWriter]
     queryset = Book.objects.all()
     serializer_class = BookDetailSerializer
     lookup_field = 'id'
-    permission_classes = [IsAuthenticated]
 
     def perform_destroy(self, instance):
         if instance.author != self.request.user:
@@ -148,7 +163,7 @@ class BookDeleteView(generics.DestroyAPIView):
     
 # --- Создание главы ---
 class ChapterCreateView(APIView):
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, IsWriter]
     parser_classes = [MultiPartParser]
 
     def post(self, request, book_id):
@@ -225,8 +240,8 @@ class ChapterDetailView(generics.RetrieveAPIView):
 
 # --- Редактирование главы ---
 class ChapterUpdateView(generics.UpdateAPIView):
+    permission_classes = [IsAuthenticated, IsWriter]
     serializer_class = ChapterUpdateSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Chapter.objects.filter(book__id=self.kwargs['book_id'])
@@ -248,8 +263,8 @@ class ChapterUpdateView(generics.UpdateAPIView):
 
 # --- Удаление главы ---
 class ChapterDeleteView(generics.DestroyAPIView):
+    permission_classes = [IsAuthenticated, IsWriter]
     serializer_class = ChapterDetailSerializer
-    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Chapter.objects.filter(book__id=self.kwargs['book_id'])
@@ -278,33 +293,28 @@ class CreateCommentView(generics.CreateAPIView):
 
 
 # --- Комментарии к книге ---
-class BookCommentsListView(ListAPIView):
-    serializer_class = CommentSerializer
+class BookCommentsListView(APIView):
+    permission_classes = [IsAuthenticatedOrReadOnly]
 
-    def get_queryset(self):
-        book_id = self.kwargs.get('id')
-        return Comment.objects.filter(book_id=book_id).order_by('-created_at')
+    def get(self, request, id):
+        all_comments = Comment.objects.filter(book_id=id).order_by('-created_at')
+        current_user_comment = None
+
+        if request.user.is_authenticated:
+            try:
+                current_user_comment_obj = all_comments.get(user=request.user)
+                current_user_comment = CommentSerializer(current_user_comment_obj).data
+                all_comments = all_comments.exclude(user=request.user)
+            except Comment.DoesNotExist:
+                pass
+
+        other_comments_serialized = CommentSerializer(all_comments, many=True).data
+
+        return Response({
+            "user_comment": current_user_comment,
+            "other_comments": other_comments_serialized
+        })
     
-
-# --- Редактирование комментария ---
-class EditCommentView(generics.UpdateAPIView):
-    serializer_class = EditCommentSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        book_id = self.kwargs.get('book_id')
-        comment_id = self.kwargs.get('comment_id')
-
-        try:
-            comment = Comment.objects.get(id=comment_id, book__id=book_id)
-        except Comment.DoesNotExist:
-            raise NotFound("Комментарий не найден.")
-
-        if comment.user != self.request.user:
-            raise PermissionDenied("Вы не можете редактировать чужой комментарий.")
-
-        return comment
-
 
 # --- Удаление комментария ---
 class DeleteCommentView(generics.DestroyAPIView):
