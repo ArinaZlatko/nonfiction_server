@@ -16,6 +16,7 @@ class User(AbstractUser):
     ROLE_CHOICES = (
         ('reader', 'читатель'),
         ('writer', 'писатель'),
+        ('admin', 'админ'),
     )
     role = models.CharField(max_length=10, choices=ROLE_CHOICES, default='reader')
 
@@ -40,6 +41,7 @@ class Genre(models.Model):
 class Book(models.Model):
     title = models.CharField(max_length=255)
     description = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     genres = models.ManyToManyField(Genre, related_name='books')
@@ -113,24 +115,3 @@ class Comment(models.Model):
 
     def __str__(self):
         return f"Комментарий от {self.user} к книге '{self.book}' с оценкой {self.rating}"
-
-
-# --- Избранное ---
-class Favorite(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='favorites')
-    book = models.ForeignKey(Book, on_delete=models.CASCADE, related_name='favorited_by')
-    added_at = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        unique_together = ('user', 'book')
-
-
-# --- Уведомление ---
-class Notification(models.Model):
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='notifications')
-    message = models.TextField()
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(default=timezone.now)
-
-    def __str__(self):
-        return f"Уведомление для {self.user}: {self.message[:50]}"

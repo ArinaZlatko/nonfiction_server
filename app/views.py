@@ -16,6 +16,7 @@ from django.http import JsonResponse
 from django.conf import settings
 from rest_framework.response import Response
 from rest_framework import status
+from django.db.models import Count, Q
 import json
 import os
 
@@ -75,13 +76,6 @@ def user_logout(request):
         except Exception as e:
             return JsonResponse({}, status=205)
 
-
-class GenreListView(APIView):
-    def get(self, request):
-        genres = Genre.objects.filter(is_active=True)
-        serializer = GenreSerializer(genres, many=True)
-        return Response(serializer.data)
-    
     
 # --- Добавление книги ---
 @api_view(['POST'])
@@ -110,15 +104,82 @@ class BookUpdateView(generics.UpdateAPIView):
         return serializer.save()
 
 
-# --- Отображение карточкой ---
+# --- Писатели ---
+class WriterListView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        search = request.query_params.get('search', '')
+
+        writers = User.objects.annotate(book_count=Count('book')) \
+                              .filter(role='writer', book_count__gt=0)
+
+        if search:
+            writers = writers.filter(first_name__icontains=search)
+
+        writers = writers.order_by('first_name')
+
+        serializer = WriterSerializer(writers, many=True)
+        return Response(serializer.data)
+    
+
+# --- Все жанры ---
+class GenreListView(APIView):
+    permission_classes = [AllowAny]
+    
+    def get(self, request):
+        genres = Genre.objects.filter(is_active=True)
+        serializer = GenreSerializer(genres, many=True)
+        return Response(serializer.data)
+    
+
+# --- Все книги ---
 class BookListView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
         books = Book.objects.filter(is_visible=True).select_related('author').prefetch_related('genres')
+
+        genre_ids = request.query_params.getlist('genre')
+        author_id = request.query_params.get('author')
+        search = request.query_params.get('search')
+        sort_field = request.query_params.get('sort_field')
+        sort_direction = request.query_params.get('sort_direction', 'asc')
+        order_prefix = '' if sort_direction == 'asc' else '-'
+
+        if genre_ids:
+            books = books.filter(genres__id__in=genre_ids) \
+                         .annotate(matched_genres=Count('genres', filter=Q(genres__id__in=genre_ids), distinct=True)) \
+                         .filter(matched_genres=len(genre_ids))
+
+        if author_id:
+            books = books.filter(author__id=author_id)
+
+        if search:
+            books = books.filter(
+                Q(title__icontains=search) |
+                Q(author__first_name__icontains=search) |
+                Q(author__last_name__icontains=search) |
+                Q(author__surname__icontains=search)
+            )
+
+        if sort_field == 'rating':
+            books = books.annotate(average_rating=Avg('comments__rating'))
+            books = books.filter(average_rating__isnull=False)
+
+        if sort_field:
+            if sort_field == 'rating':
+                books = books.order_by(f"{order_prefix}average_rating")
+            elif sort_field == 'date':
+                books = books.order_by(f"{order_prefix}created_at")
+            else:
+                books = books.order_by(f"{order_prefix}{sort_field}")
+
+        books = books.distinct()
+
         serializer = BookSerializer(books, many=True)
         return Response(serializer.data)
-    
+
 
 # --- Книги авторизованного пользователя ---
 class MyBooksView(APIView):
