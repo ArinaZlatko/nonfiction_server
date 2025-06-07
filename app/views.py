@@ -238,11 +238,9 @@ class ChapterCreateView(APIView):
             title = serializer.validated_data['title']
             content = serializer.validated_data['content']
 
-            # Найдём следующий order
             last_order = Chapter.objects.filter(book=book).aggregate(models.Max('order'))['order__max'] or 0
             order = last_order + 1
 
-            # Создаём главу с уникальным порядком
             chapter = Chapter.objects.create(book=book, title=title, content=content, order=order)
 
             images = request.FILES.getlist('images')
@@ -376,21 +374,3 @@ class BookCommentsListView(APIView):
             "other_comments": other_comments_serialized
         })
     
-
-# --- Удаление комментария ---
-class DeleteCommentView(generics.DestroyAPIView):
-    permission_classes = [IsAuthenticated]
-
-    def get_object(self):
-        book_id = self.kwargs.get('book_id')
-        comment_id = self.kwargs.get('comment_id')
-
-        try:
-            comment = Comment.objects.get(id=comment_id, book__id=book_id)
-        except Comment.DoesNotExist:
-            raise NotFound("Комментарий не найден.")
-
-        if comment.user != self.request.user:
-            raise PermissionDenied("Вы не можете удалить чужой комментарий.")
-
-        return comment

@@ -1,4 +1,3 @@
-from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 from django.urls import path
 from .views import *
 
@@ -15,7 +14,6 @@ urlpatterns = [
     path('books/<int:id>/edit/', BookUpdateView.as_view(), name='edit_book'),
     path('books/<int:id>/delete/', BookDeleteView.as_view(), name='delete_book'),
     path('books/<int:id>/comments/', BookCommentsListView.as_view(), name='book-comments-list'),
-    path('books/<int:book_id>/comment/<int:comment_id>/delete', DeleteCommentView.as_view(), name='delete_comment'),
     path('books/<int:id>/comment/upload/', CreateCommentView.as_view(), name='create_comment'),
     path('books/<int:id>/', BookDetailView.as_view(), name='book-detail'),
     path('books/upload/', upload_book, name='upload_book'),

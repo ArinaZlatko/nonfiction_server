@@ -99,12 +99,16 @@ class BookCESerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         genres = validated_data.pop('genres', None)
+        cover_file = validated_data.pop('cover', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
 
         if genres is not None:
             instance.genres.set(genres)
+
+        if cover_file:
+            save_cover_file(instance, cover_file)
 
         instance.save()
         return instance

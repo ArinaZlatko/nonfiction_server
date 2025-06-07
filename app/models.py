@@ -2,7 +2,6 @@ import os
 from django.contrib.auth.models import AbstractUser
 from django.db import models
 from django.forms import ValidationError
-from django.utils import timezone
 from django.conf import settings
 
 
