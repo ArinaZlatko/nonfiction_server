@@ -4,6 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from rest_framework.validators import UniqueValidator
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.conf import settings
+from django.db.models import Avg
 import os
 from .models import *
 
@@ -98,6 +99,7 @@ class BookCESerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         genres = validated_data.pop('genres', None)
+        cover_file = validated_data.pop('cover', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -105,11 +107,20 @@ class BookCESerializer(serializers.ModelSerializer):
         if genres is not None:
             instance.genres.set(genres)
 
+        if cover_file:
+            save_cover_file(instance, cover_file)
+
         instance.save()
         return instance
 
 
-class AuthorSerializer(serializers.ModelSerializer):
+# --- Расчет рейтинга книги ---
+def get_book_average_rating(book_id):
+    result = Comment.objects.filter(book_id=book_id).aggregate(avg_rating=Avg('rating'))
+    return result['avg_rating']
+
+
+class WriterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'first_name', 'last_name', 'surname']
@@ -117,11 +128,15 @@ class AuthorSerializer(serializers.ModelSerializer):
 
 class BookSerializer(serializers.ModelSerializer):
     genres = GenreSerializer(many=True)
-    author = AuthorSerializer()
+    author = WriterSerializer()
+    average_rating = serializers.SerializerMethodField()
 
     class Meta:
         model = Book
-        fields = ['id', 'title', 'description', 'author', 'genres', 'cover']
+        fields = ['id', 'title', 'created_at', 'description', 'author', 'genres', 'cover', 'average_rating']
+        
+    def get_average_rating(self, obj):
+        return get_book_average_rating(obj.id)
         
         
 class ChapterSerializer(serializers.ModelSerializer):
@@ -137,7 +152,7 @@ class BookDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Book
-        fields = ['id', 'title', 'description', 'author', 'genres', 'cover', 'chapters']
+        fields = ['id', 'title', 'created_at', 'description', 'author', 'genres', 'cover', 'chapters']
     
     
 class ChapterImageSerializer(serializers.ModelSerializer):
