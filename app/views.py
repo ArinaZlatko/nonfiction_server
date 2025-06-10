@@ -52,14 +52,14 @@ class MyTokenRefreshView(TokenRefreshView):
         return Response(serializer.validated_data, status=status.HTTP_200_OK)
    
     
-# Регистрация
+# --- Регистрация ---
 @method_decorator(csrf_exempt, name='dispatch')
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
     permission_classes = [AllowAny]
 
 
-# Выход
+# --- Выход ---
 @csrf_exempt
 def user_logout(request):
     if request.method == 'POST':
