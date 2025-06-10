@@ -22,7 +22,8 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
 
         return token
       
-    
+
+# --- Регистрация ---
 class RegisterSerializer(serializers.ModelSerializer):
     email = serializers.EmailField(required=True, validators=[UniqueValidator(queryset=User.objects.all())])
     password = serializers.CharField(write_only=True, required=True, validators=[validate_password])
@@ -57,12 +58,14 @@ def save_cover_file(book, cover_file):
     book.save()
     
 
+# --- Все жанры --
 class GenreSerializer(serializers.ModelSerializer):
     class Meta:
         model = Genre
         fields = ['id', 'name']
         
-        
+
+# --- Добаление/редактирование книги --- 
 class BookCESerializer(serializers.ModelSerializer):
     genres = GenreSerializer(many=True, read_only=True)
     genre_ids = serializers.PrimaryKeyRelatedField(
@@ -120,12 +123,14 @@ def get_book_average_rating(book_id):
     return result['avg_rating']
 
 
+# --- Все писатели ---
 class WriterSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'first_name', 'last_name', 'surname']
 
 
+# --- Все/мои книги ---
 class BookSerializer(serializers.ModelSerializer):
     genres = GenreSerializer(many=True)
     author = WriterSerializer()
@@ -139,12 +144,14 @@ class BookSerializer(serializers.ModelSerializer):
         return get_book_average_rating(obj.id)
         
         
+# --- Главы для деталей книги ---
 class ChapterSerializer(serializers.ModelSerializer):
     class Meta:
         model = Chapter
         fields = ['id', 'title', 'order']
 
 
+# --- Детали книги ---
 class BookDetailSerializer(serializers.ModelSerializer):
     author = serializers.StringRelatedField()
     genres = GenreSerializer(many=True)
@@ -154,7 +161,8 @@ class BookDetailSerializer(serializers.ModelSerializer):
         model = Book
         fields = ['id', 'title', 'created_at', 'description', 'author', 'genres', 'cover', 'chapters']
     
-    
+
+# --- Для изображений в главах (детали, редактирование) ---
 class ChapterImageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChapterImage
@@ -170,12 +178,14 @@ class ChapterImageSerializer(serializers.ModelSerializer):
             'order': data.get('order')
         }
  
-        
+
+# --- Добавление главы ---
 class ChapterUploadSerializer(serializers.Serializer):
     title = serializers.CharField()
     content = serializers.CharField()
 
 
+# --- Редактирование главы ---
 class ChapterUpdateSerializer(serializers.ModelSerializer):
     images = ChapterImageSerializer(many=True)
 
@@ -203,6 +213,7 @@ class ChapterUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+# --- Детали главы ---
 class ChapterDetailSerializer(serializers.ModelSerializer):
     images = ChapterImageSerializer(many=True, read_only=True)
 
