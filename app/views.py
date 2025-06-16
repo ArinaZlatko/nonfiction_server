@@ -191,7 +191,7 @@ class MyBooksView(APIView):
         return Response(serializer.data)
 
 
-# --- Детальное отображение ---
+# --- Детальное отображение книги ---
 class BookDetailView(generics.RetrieveAPIView):
     queryset = Book.objects.prefetch_related('genres', 'chapters').select_related('author')
     serializer_class = BookDetailSerializer
@@ -280,12 +280,13 @@ class ChapterCreateView(APIView):
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-# --- Просмотр главы ---
+# --- Детальное отображение главы ---
 class ChapterDetailView(generics.RetrieveAPIView):
+    permission_classes = [AllowAny]
     serializer_class = ChapterDetailSerializer
 
     def get_queryset(self):
-        return Chapter.objects.prefetch_related('images')
+        return Chapter.objects.select_related('book__author').prefetch_related('images')
 
     def get_object(self):
         queryset = self.get_queryset()
@@ -295,6 +296,16 @@ class ChapterDetailView(generics.RetrieveAPIView):
             return queryset.get(id=chapter_id, book_id=book_id)
         except Chapter.DoesNotExist:
             raise NotFound('Chapter not found')
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        serializer = self.get_serializer(instance)
+        data = serializer.data
+
+        is_owner = request.user.is_authenticated and instance.book.author == request.user
+        data['is_owner'] = is_owner
+
+        return Response(data)
         
 
 # --- Редактирование главы ---
